@@ -1,4 +1,5 @@
 import streamlit as st
+from google import genai
 
 # ==============================
 # PAGE CONFIGURATION
@@ -11,17 +12,28 @@ st.set_page_config(
 )
 
 # ==============================
+# GEMINI AI CONNECTION
+# ==============================
+try:
+    client = genai.Client(
+        api_key=st.secrets["GEMINI_API_KEY"]
+    )
+    gemini_ready = True
+
+except Exception:
+    gemini_ready = False
+
+
+# ==============================
 # CUSTOM CSS
 # ==============================
 st.markdown("""
 <style>
 
-    /* ---------- MAIN BACKGROUND ---------- */
     .stApp {
         background: linear-gradient(135deg, #f8f9ff 0%, #eef2ff 100%);
     }
 
-    /* ---------- SIDEBAR ---------- */
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, #111827 0%, #1e293b 100%);
     }
@@ -30,7 +42,6 @@ st.markdown("""
         color: white !important;
     }
 
-    /* ---------- HEADER ---------- */
     .main-header {
         background: linear-gradient(135deg, #6366f1, #8b5cf6);
         padding: 25px 30px;
@@ -52,7 +63,6 @@ st.markdown("""
         opacity: 0.9;
     }
 
-    /* ---------- WELCOME CARD ---------- */
     .welcome-card {
         background: white;
         padding: 30px;
@@ -72,7 +82,6 @@ st.markdown("""
         font-size: 16px;
     }
 
-    /* ---------- FEATURE CARDS ---------- */
     .feature-card {
         background: white;
         padding: 22px;
@@ -104,19 +113,16 @@ st.markdown("""
         color: #64748b;
     }
 
-    /* ---------- CHAT MESSAGES ---------- */
     [data-testid="stChatMessage"] {
         border-radius: 18px;
         padding: 10px;
         margin-bottom: 10px;
     }
 
-    /* ---------- CHAT INPUT ---------- */
     [data-testid="stChatInput"] {
         border-radius: 15px;
     }
 
-    /* ---------- BUTTONS ---------- */
     .stButton > button {
         border-radius: 12px;
         border: none;
@@ -132,7 +138,6 @@ st.markdown("""
         transform: translateY(-2px);
     }
 
-    /* ---------- SIDEBAR LOGO ---------- */
     .sidebar-logo {
         text-align: center;
         padding: 15px 5px 25px 5px;
@@ -152,7 +157,6 @@ st.markdown("""
         opacity: 0.7;
     }
 
-    /* ---------- FOOTER ---------- */
     .footer {
         text-align: center;
         color: #94a3b8;
@@ -291,7 +295,10 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 
-# User input
+# ==============================
+# USER INPUT
+# ==============================
+
 user_input = st.chat_input(
     "💬 Ask StuDUBuddy anything..."
 )
@@ -299,26 +306,90 @@ user_input = st.chat_input(
 
 if user_input:
 
-    # Display user message
+    # Save user message
     st.session_state.messages.append({
         "role": "user",
         "content": user_input
     })
 
+    # Display user message
     with st.chat_message("user"):
         st.markdown(user_input)
 
+    # ==============================
+    # GEMINI RESPONSE
+    # ==============================
 
-    # ------------------------------------------------
-    # PUT YOUR AI/API RESPONSE CODE HERE
-    # ------------------------------------------------
-
-    response = "I'm StuDUBuddy AI! 🤖 I'm here to help you solve your problem."
-
-    # Display AI response
     with st.chat_message("assistant"):
-        st.markdown(response)
 
+        if not gemini_ready:
+
+            response = (
+                "⚠️ Gemini is not connected yet. "
+                "Please check the GEMINI_API_KEY in Streamlit Secrets."
+            )
+
+            st.markdown(response)
+
+        else:
+
+            try:
+
+                # Create conversation context
+                conversation = ""
+
+                for message in st.session_state.messages:
+                    if message["role"] == "user":
+                        conversation += f"Student: {message['content']}\n"
+
+                    elif message["role"] == "assistant":
+                        conversation += f"StuDUBuddy AI: {message['content']}\n"
+
+                prompt = f"""
+You are StuDUBuddy AI, a helpful and friendly AI companion
+designed specifically for students.
+
+Your job is to:
+- Explain difficult concepts simply.
+- Help with coding and debugging.
+- Help students understand assignments.
+- Provide study guidance.
+- Provide career guidance.
+- Give step-by-step solutions when useful.
+- Encourage students to learn rather than simply copy answers.
+
+Be clear, friendly, concise and educational.
+
+Conversation:
+
+{conversation}
+
+Student's latest question:
+{user_input}
+
+Give the student a helpful answer.
+"""
+
+                result = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt
+                )
+
+                response = result.text
+
+                st.markdown(response)
+
+            except Exception as e:
+
+                response = (
+                    "Sorry, I couldn't process your question right now. "
+                    "Please try again.\n\n"
+                    f"Error: {e}"
+                )
+
+                st.markdown(response)
+
+    # Save AI response
     st.session_state.messages.append({
         "role": "assistant",
         "content": response
